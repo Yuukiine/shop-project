@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Online Shop</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 3rem;
+            width: 100%;
+            max-width: 400px;
+            margin: 2rem;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo h1 {
+            color: #2c3e50;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.875rem;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background-color: #f8f9fa;
+        }
+
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #3498db;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 0.875rem;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-bottom: 1rem;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .error-message {
+            background: #e74c3c;
+            color: white;
+            padding: 0.875rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .success-message {
+            background: #27ae60;
+            color: white;
+            padding: 0.875rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .links {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .links a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .links a:hover {
+            color: #2980b9;
+            text-decoration: underline;
+        }
+
+        .divider {
+            margin: 1.5rem 0;
+            text-align: center;
+            color: #666;
+            position: relative;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #e1e8ed;
+        }
+
+        .divider span {
+            background: white;
+            padding: 0 1rem;
+        }
+
+        .forgot-password {
+            text-align: right;
+            margin-top: 0.5rem;
+        }
+
+        .forgot-password a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s ease;
+        }
+
+        .forgot-password a:hover {
+            color: #3498db;
+        }
+
+        .back-home {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            transition: background 0.2s ease;
+        }
+
+        .back-home:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 2rem 1.5rem;
+                margin: 1rem;
+            }
+
+            .back-home {
+                position: static;
+                display: inline-block;
+                margin-bottom: 2rem;
+                color: #3498db;
+                background: rgba(52, 152, 219, 0.1);
+            }
+        }
+
+        /* Loading state */
+        .loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 2px solid transparent;
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<a href="/" class="back-home">← Back to Shop</a>
+
+<div class="login-container">
+    <div class="logo">
+        <h1>Welcome Back</h1>
+        <p>Sign in to your account</p>
+    </div>
+
+    {{if .Error}}
+    <div class="error-message">
+        {{.Error}}
+    </div>
+    {{end}}
+
+    {{if .Success}}
+    <div class="success-message">
+        {{.Success}}
+    </div>
+    {{end}}
+
+    <form method="POST" action="/login" id="loginForm">
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value="{{.Email}}"
+                    required
+                    autocomplete="email"
+                    placeholder="Enter your email"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    autocomplete="current-password"
+                    placeholder="Enter your password"
+            >
+            <div class="forgot-password">
+                <a href="/forgot-password">Forgot your password?</a>
+            </div>
+        </div>
+
+        <button type="submit" class="login-btn" id="loginBtn">
+            Sign In
+        </button>
+    </form>
+
+    <div class="divider">
+        <span>or</span>
+    </div>
+
+    <div class="links">
+        Don't have an account? <a href="/register">Create one here</a>
+    </div>
+</div>
+
+<script>
+    // Add form submission handling
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = true;
+        btn.classList.add('loading');
+        btn.textContent = 'Signing In...';
+    });
+
+    // Re-enable button if there's an error (page reload)
+    window.addEventListener('load', function() {
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        btn.textContent = 'Sign In';
+    });
+
+    // Focus first empty field
+    window.addEventListener('load', function() {
+        const emailField = document.getElementById('email');
+        const passwordField = document.getElementById('password');
+
+        if (!emailField.value) {
+            emailField.focus();
+        } else {
+            passwordField.focus();
+        }
+    });
+</script>
+</body>
+</html>
