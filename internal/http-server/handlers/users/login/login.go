@@ -1,7 +1,7 @@
 package login
 
 import (
-	"context"
+	"errors"
 	"html/template"
 	"net/http"
 	"time"
@@ -9,28 +9,22 @@ import (
 	ssov1 "github.com/Yuukiine/protos/gen/go/sso"
 	"go.uber.org/zap"
 
-	"shop/internal/domain/models"
+	"shop/internal/grpc/auth"
 )
 
 type Handler struct {
-	storage    Storage
 	AuthClient ssov1.AuthClient
 	logger     *zap.Logger
 	tmpl       *template.Template
 }
 
-type Storage interface {
-	User(ctx context.Context, email string) (models.User, error)
-}
-
-func NewLoginHandler(authClient ssov1.AuthClient, storage Storage, logger *zap.Logger) *Handler {
+func NewLoginHandler(authClient ssov1.AuthClient, logger *zap.Logger) *Handler {
 	tmpl, err := template.ParseFiles("./html-templates/login_page.html")
 	if err != nil {
 		logger.Fatal("failed to parse home template", zap.Error(err))
 	}
 
 	return &Handler{
-		storage:    storage,
 		logger:     logger,
 		tmpl:       tmpl,
 		AuthClient: authClient,
@@ -45,7 +39,6 @@ type PageData struct {
 }
 
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	time.Sleep(2 * time.Second)
 	if err := r.ParseForm(); err != nil {
 		h.logger.Error("failed to parse login form", zap.Error(err))
 		http.Redirect(w, r, "/login?error=Invalid+form+data", http.StatusSeeOther)
@@ -68,6 +61,16 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("login failed",
 			zap.String("email", email),
 			zap.Error(err))
+		if errors.Is(err, auth.ErrInvalidArgument) {
+			h.ServeHTTPWithError(w, "Invalid credentials. Please try again", email)
+			return
+		}
+		if errors.Is(err, auth.ErrNotFound) {
+			h.ServeHTTPWithError(w, "User with this email doesn't exist. Please complete registration, or try another credentials", email)
+			return
+		}
+
+		h.ServeHTTPWithError(w, "Internal error. Please try again later", email)
 		return
 	}
 
@@ -88,19 +91,29 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	data := PageData{
 		Title: "Login to Your Account",
-	}
-
-	if msg := r.URL.Query().Get("error"); msg != "" {
-		data.Error = msg
-	}
-	if msg := r.URL.Query().Get("success"); msg != "" {
-		data.Success = msg
+		Error: "",
 	}
 
 	if err := h.tmpl.Execute(w, data); err != nil {
 		h.logger.Error("failed to execute home template", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+}
+
+func (h *Handler) ServeHTTPWithError(w http.ResponseWriter, errorMsg, email string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusBadRequest)
+
+	data := PageData{
+		Title: "Login to Your Account",
+		Error: errorMsg,
+		Email: email,
+	}
+
+	if err := h.tmpl.Execute(w, data); err != nil {
+		h.logger.Error("failed to execute login template with error", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
 

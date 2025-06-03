@@ -97,12 +97,14 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (
 }
 
 func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
+	const op = "storage.User"
+
 	stmt, err := s.db.Prepare(`
-		SELECT id, email, pass_hash 
+		SELECT user_id, email, pass_hash 
 		FROM users 
 		WHERE email = ?`)
 	if err != nil {
-		return models.User{}, fmt.Errorf("failed to prepare statement: %w", err)
+		return models.User{}, fmt.Errorf("%s: failed to prepare statement: %w", op, err)
 	}
 
 	row := stmt.QueryRowContext(ctx, email)
@@ -111,22 +113,23 @@ func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
 	err = row.Scan(&user.ID, &user.Email, &user.PassHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.User{}, fmt.Errorf("user not found: %w", storage.ErrUserNotFound)
+			return models.User{}, fmt.Errorf("%s: user not found: %w", op, storage.ErrUserNotFound)
 		}
 
-		return models.User{}, fmt.Errorf("failed to fetch user: %w", err)
+		return models.User{}, fmt.Errorf("%s: failed to fetch user: %w", op, err)
 	}
 
 	return user, nil
 }
 
 func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+	const op = "storage.IsAdmin"
 	stmt, err := s.db.Prepare(`
 		SELECT is_admin 
 		FROM users 
-		WHERE id = ?`)
+		WHERE user_id = ?`)
 	if err != nil {
-		return false, fmt.Errorf("failed to prepare statement: %w", err)
+		return false, fmt.Errorf("%s: failed to prepare statement: %w", op, err)
 	}
 
 	row := stmt.QueryRowContext(ctx, userID)
@@ -136,10 +139,10 @@ func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	err = row.Scan(&isAdmin)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, fmt.Errorf("user not found: %w", storage.ErrUserNotFound)
+			return false, fmt.Errorf("%s: user not found: %w", op, storage.ErrUserNotFound)
 		}
 
-		return false, fmt.Errorf("failed to fetch user: %w", err)
+		return false, fmt.Errorf("%s: failed to fetch user: %w", op, err)
 	}
 
 	return isAdmin, nil
@@ -147,9 +150,9 @@ func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 
 func (s *Storage) App(ctx context.Context, appID int) (models.App, error) {
 	stmt, err := s.db.Prepare(`
-		SELECT id, name, secret 
+		SELECT app_id, name, secret 
 		FROM apps 
-		WHERE id = ?`)
+		WHERE app_id = ?`)
 	if err != nil {
 		return models.App{}, fmt.Errorf("failed to prepare statement: %w", err)
 	}

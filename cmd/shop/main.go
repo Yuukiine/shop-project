@@ -19,6 +19,7 @@ import (
 	"shop/internal/config"
 	"shop/internal/http-server/handlers/home"
 	"shop/internal/http-server/handlers/users/login"
+	"shop/internal/http-server/handlers/users/register"
 	zapper "shop/internal/logger"
 	mwLogger "shop/internal/logger/middleware"
 	"shop/internal/storage/sqlite"
@@ -55,7 +56,8 @@ func main() {
 	}
 
 	homeHandler := home.NewHomeHandler(storage, logger)
-	loginHandler := login.NewLoginHandler(authClient, storage, logger)
+	loginHandler := login.NewLoginHandler(authClient, logger)
+	registerHandler := register.NewRegisterHandler(authClient, logger)
 
 	router := chi.NewRouter()
 
@@ -67,9 +69,19 @@ func main() {
 
 	logger.Info("starting server", zap.String("address", cfg.Address))
 	router.Get("/", homeHandler.ServeHTTP)
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`))
+	})
+
 	router.Route("/login", func(r chi.Router) {
 		r.Get("/", loginHandler.ServeHTTP)
 		r.Post("/", loginHandler.HandleLogin)
+	})
+	router.Route("/register", func(r chi.Router) {
+		r.Get("/", registerHandler.ServeHTTP)
+		r.Post("/", registerHandler.HandleRegister)
 	})
 	// router.Post("/logout", authHandler.HandleLogout)
 

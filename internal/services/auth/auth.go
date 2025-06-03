@@ -85,19 +85,19 @@ func (a *Auth) Login(
 	user, err := a.usrProvider.User(ctx, email)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			a.log.Warn("user not found: " + err.Error())
+			log.Warn("user not found: " + err.Error())
 
-			return "", fmt.Errorf("%s, %w", op, ErrInvalidCredentials)
+			return "", fmt.Errorf("%s, %w", op, ErrUserNotFound)
 		}
-		a.log.Error("failed to get user: " + err.Error())
+		log.Error("failed to get user: " + err.Error())
 
 		return "", fmt.Errorf("%s, %w", op, err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword(user.PassHash, []byte(password)); err != nil {
-		a.log.Error("invalid credentials: " + err.Error())
+		log.Error("invalid credentials: " + err.Error())
 
-		return "", fmt.Errorf("%s, %w", op, ErrInvalidCredentials)
+		return "", ErrInvalidCredentials
 	}
 
 	app, err := a.appProvider.App(ctx, appID)
@@ -109,7 +109,7 @@ func (a *Auth) Login(
 
 	token, err := jwt.NewToken(user, app, a.tokenTTL)
 	if err != nil {
-		a.log.Error("failed to generate token: " + err.Error())
+		log.Error("failed to generate token: " + err.Error())
 
 		return "", fmt.Errorf("%s, %w", op, err)
 	}
@@ -131,7 +131,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, pass string) (
 
 	passHash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.MinCost)
 	if err != nil {
-		log.Error("failed to hash password: " + err.Error())
+		log.Error("failed to hash password: ", zap.Error(err))
 
 		return 0, fmt.Errorf("%s, %w", op, err)
 	}
@@ -139,12 +139,12 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, pass string) (
 	id, err := a.usrSaver.SaveUser(ctx, email, passHash)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {
-			log.Warn("user already exists: " + err.Error())
+			log.Error("user already exists: ", zap.Error(err))
 
 			return 0, fmt.Errorf("%s, %w", op, ErrUserExists)
 		}
 
-		log.Error("failed to save user: " + err.Error())
+		log.Error("failed to save user: ", zap.Error(err))
 
 		return 0, fmt.Errorf("%s, %w", op, err)
 	}

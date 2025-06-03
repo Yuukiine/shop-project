@@ -12,6 +12,13 @@ import (
 	"shop/internal/services/auth"
 )
 
+var (
+	ErrInvalidArgument = status.Error(codes.InvalidArgument, "Invalid email or password")
+	ErrNotFound        = status.Error(codes.NotFound, "User not found")
+	ErrInternal        = status.Error(codes.Internal, "failed to login")
+	ErrExists          = status.Error(codes.AlreadyExists, "User already exists")
+)
+
 type Auth interface {
 	Login(
 		ctx context.Context,
@@ -45,16 +52,19 @@ func (s *ServerAPI) Login(
 	req *ssov1.LoginRequest,
 ) (*ssov1.LoginResponse, error) {
 	if err := validateLogin(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, ErrInvalidArgument
 	}
 
 	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), int(req.GetAppId()))
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
-			return nil, status.Error(codes.InvalidArgument, "invalid email or password")
+			return nil, ErrInvalidArgument
+		}
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return nil, ErrNotFound
 		}
 
-		return nil, status.Error(codes.Internal, "failed to login")
+		return nil, ErrInternal
 	}
 
 	return &ssov1.LoginResponse{Token: token}, nil
@@ -65,16 +75,16 @@ func (s *ServerAPI) Register(
 	req *ssov1.RegisterRequest,
 ) (*ssov1.RegisterResponse, error) {
 	if err := validateRegister(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, ErrInvalidArgument
 	}
 
 	userID, err := s.auth.RegisterNewUser(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, auth.ErrUserExists) {
-			return nil, status.Error(codes.AlreadyExists, "user already exists")
+			return nil, ErrExists
 		}
 
-		return nil, status.Error(codes.Internal, "failed to register user")
+		return nil, ErrInternal
 	}
 
 	return &ssov1.RegisterResponse{UserId: userID}, nil
@@ -85,13 +95,13 @@ func (s *ServerAPI) IsAdmin(
 	req *ssov1.IsAdminRequest,
 ) (*ssov1.IsAdminResponse, error) {
 	if err := validateIsAdmin(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, ErrInvalidArgument
 	}
 
 	isAdmin, err := s.auth.IsAdmin(ctx, req.GetUserId())
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, status.Error(codes.NotFound, "user not found")
+			return nil, ErrNotFound
 		}
 
 		return nil, status.Error(codes.Internal, "failed to check admin status")
