@@ -1,9 +1,11 @@
 package jwt
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 
 	"shop/internal/domain/models"
 )
@@ -23,4 +25,30 @@ func NewToken(user models.User, app models.App, duration time.Duration) (string,
 	}
 
 	return tokenString, nil
+}
+
+func ParseTokenForEmail(logger *zap.Logger, tokenString string) (string, error) {
+	const op = "jwt.ParseTokenForEmail"
+
+	secretKey := []byte("test-secret")
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("%s: unexpected signing method: %v", op, token.Header["alg"])
+		}
+		return secretKey, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	var email string
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		email = claims["email"].(string)
+	} else {
+		return "", fmt.Errorf("invalid token")
+	}
+
+	return email, nil
 }

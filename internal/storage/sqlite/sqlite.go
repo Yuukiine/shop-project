@@ -26,6 +26,34 @@ func New(path string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
+func (s *Storage) GetProduct(ctx context.Context, id int) (models.Product, error) {
+	const op = "storage.GetProduct"
+
+	stmt, err := s.db.Prepare(
+		`
+		SELECT p.id, p.name, p.description, p.price, p.stock, c.name
+		FROM products AS p
+		JOIN categories AS c ON c.id = p.category_id
+		WHERE p.id = ?`)
+	if err != nil {
+		return models.Product{}, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+
+	var p models.Product
+	row := stmt.QueryRowContext(ctx, id)
+
+	err = row.Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Stock, &p.Category)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Product{}, fmt.Errorf("%s: product not found: %w", op, storage.ErrProductNotFound)
+		}
+
+		return models.Product{}, fmt.Errorf("%s: failed to fetch product: %w", op, err)
+	}
+
+	return p, nil
+}
+
 func (s *Storage) GetProducts(ctx context.Context, limit, offset int) ([]models.Product, error) {
 	stmt, err := s.db.Prepare(
 		`
@@ -170,4 +198,26 @@ func (s *Storage) App(ctx context.Context, appID int) (models.App, error) {
 	}
 
 	return app, nil
+}
+
+func (s *Storage) TotalProducts(ctx context.Context) (int, error) {
+	const op = "storage.TotalProducts"
+
+	stmt, err := s.db.Prepare(`
+		SELECT COUNT(id)
+		FROM products`)
+	if err != nil {
+		return 0, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+
+	row := stmt.QueryRowContext(ctx)
+
+	var total int
+
+	err = row.Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to fetch total products: %w", op, err)
+	}
+
+	return total, nil
 }

@@ -8,10 +8,12 @@ import (
 	"go.uber.org/zap"
 
 	"shop/internal/domain/models"
+	"shop/internal/random"
+	"shop/lib/jwt"
 )
 
 type Storage interface {
-	GetProducts(ctx context.Context, limit, offset int) ([]models.Product, error)
+	GetProduct(ctx context.Context, id int) (models.Product, error)
 }
 
 type Handler struct {
@@ -34,6 +36,8 @@ func NewHomeHandler(storage Storage, logger *zap.Logger) *Handler {
 }
 
 type PageData struct {
+	User     string
+	Email    string
 	Title    string
 	Products []models.Product
 	Error    string
@@ -46,14 +50,29 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Title: "Welcome to Our Shop",
 	}
 
-	products, err := h.storage.GetProducts(r.Context(), 10, 0)
-	if err != nil {
-		h.logger.Error("failed to fetch products", zap.Error(err))
-		data.Error = "Unable to load products at this time. Please try again later."
-	} else {
-		data.Products = products
-		h.logger.Info("loaded products for home page", zap.Int("count", len(products)))
+	cookie, err := r.Cookie("auth_token")
+	if err == nil {
+		email, err := jwt.ParseTokenForEmail(h.logger, cookie.Value)
+		if err != nil {
+			h.logger.Error("failed to parse token", zap.Error(err))
+		}
+
+		data.User = "true"
+		data.Email = email
 	}
+
+	var products []models.Product
+	for range 9 {
+		product, err := h.storage.GetProduct(r.Context(), random.RandomProductID(100))
+		if err != nil {
+			h.logger.Error("failed to fetch products", zap.Error(err))
+			data.Error = "Unable to load products at this time. Please try again later."
+		}
+		products = append(products, product)
+	}
+
+	data.Products = products
+	h.logger.Info("loaded products for home page", zap.Int("count", len(products)))
 
 	if err := h.tmpl.Execute(w, data); err != nil {
 		h.logger.Error("failed to execute home template", zap.Error(err))

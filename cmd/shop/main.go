@@ -18,6 +18,7 @@ import (
 	"shop/internal/app"
 	"shop/internal/config"
 	"shop/internal/http-server/handlers/home"
+	"shop/internal/http-server/handlers/products"
 	"shop/internal/http-server/handlers/users/login"
 	"shop/internal/http-server/handlers/users/register"
 	zapper "shop/internal/logger"
@@ -58,6 +59,7 @@ func main() {
 	homeHandler := home.NewHomeHandler(storage, logger)
 	loginHandler := login.NewLoginHandler(authClient, logger)
 	registerHandler := register.NewRegisterHandler(authClient, logger)
+	productsHandler := products.NewProductsHandler(storage, logger)
 
 	router := chi.NewRouter()
 
@@ -83,7 +85,9 @@ func main() {
 		r.Get("/", registerHandler.ServeHTTP)
 		r.Post("/", registerHandler.HandleRegister)
 	})
-	// router.Post("/logout", authHandler.HandleLogout)
+	router.Get("/logout", loginHandler.HandleLogout)
+
+	router.Get("/products", productsHandler.ServeHTTP)
 
 	srv := &http.Server{
 		Addr:    cfg.Address,

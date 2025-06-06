@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - Online Shop</title>
+    <title>Products - {{.Title}}</title>
     <style>
         * {
             margin: 0;
@@ -136,11 +136,34 @@
             }
         }
 
+        .page-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .products-info {
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
         .products-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 2rem;
-            margin-bottom: 2rem;
+            margin-bottom: 3rem;
         }
 
         .product-card {
@@ -191,31 +214,61 @@
             font-size: 1.5rem;
             font-weight: 700;
             color: #27ae60;
+            margin-bottom: 1rem;
         }
 
-        .more-products-section {
-            text-align: center;
+        .add-to-cart-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .add-to-cart-btn:hover {
+            background: #c0392b;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
             margin-bottom: 3rem;
         }
 
-        .more-btn {
-            display: inline-block;
-            padding: 0.75rem 2rem;
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 500;
+        .pagination a, .pagination span {
+            padding: 0.5rem 0.75rem;
             text-decoration: none;
-            cursor: pointer;
+            border: 1px solid #ddd;
+            color: #333;
+            border-radius: 4px;
             transition: all 0.2s ease;
         }
 
-        .more-btn:hover {
-            background: #2980b9;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        .pagination a:hover {
+            background: #f8f9fa;
+            border-color: #3498db;
+        }
+
+        .pagination .current {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        .pagination .disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .pagination .disabled:hover {
+            background: transparent;
+            border-color: #ddd;
         }
 
         .no-products {
@@ -246,7 +299,7 @@
 <header>
     <div class="container">
         <div class="header-content">
-            <h1>{{.Title}}</h1>
+            <h1><a href="/" style="text-decoration: none; color: inherit;">{{.Title}}</a></h1>
             <div class="auth-section">
                 {{if .User}}
                 <div class="user-dropdown">
@@ -264,6 +317,11 @@
 </header>
 
 <main class="container">
+    <div class="page-header">
+        <h2 class="page-title">All Products</h2>
+        <p class="page-subtitle">Discover our complete collection</p>
+    </div>
+
     {{if .Error}}
     <div class="error-message">
         {{.Error}}
@@ -271,6 +329,12 @@
     {{end}}
 
     {{if .Products}}
+    <!-- Products Info -->
+    <div class="products-info">
+        Showing {{.StartResult}}-{{.EndResult}} of {{.TotalProducts}} products
+    </div>
+
+    <!-- Products Grid -->
     <div class="products-grid">
         {{range .Products}}
         <div class="product-card">
@@ -281,14 +345,40 @@
                 <h3 class="product-name">{{.Name}}</h3>
                 <p class="product-description">{{.Description}}</p>
                 <div class="product-price">${{printf "%.2f" .Price}}</div>
+                <button class="add-to-cart-btn" onclick="addToCart('{{.ID}}')">Add to Cart</button>
             </div>
         </div>
         {{end}}
     </div>
 
-    <div class="more-products-section">
-        <a href="/products" class="more-btn">More Products</a>
+    <!-- Pagination -->
+    {{if gt .TotalPages 1}}
+    <div class="pagination">
+        {{if gt .CurrentPage 1}}
+        <a href="?page=1">&laquo; First</a>
+        <a href="?page={{.PrevPage}}">&lsaquo; Previous</a>
+        {{else}}
+        <span class="disabled">&laquo; First</span>
+        <span class="disabled">&lsaquo; Previous</span>
+        {{end}}
+
+        {{range .PageNumbers}}
+        {{if eq . $.CurrentPage}}
+        <span class="current">{{.}}</span>
+        {{else}}
+        <a href="?page={{.}}">{{.}}</a>
+        {{end}}
+        {{end}}
+
+        {{if lt .CurrentPage .TotalPages}}
+        <a href="?page={{.NextPage}}">Next &rsaquo;</a>
+        <a href="?page={{.TotalPages}}">Last &raquo;</a>
+        {{else}}
+        <span class="disabled">Next &rsaquo;</span>
+        <span class="disabled">Last &raquo;</span>
+        {{end}}
     </div>
+    {{end}}
     {{else}}
     <div class="no-products">
         <h2>No products available</h2>
@@ -299,10 +389,10 @@
 
 <footer>
     <div class="container">
-        <p>&copy; 2025 Online Shop. All rights reserved.</p>
+        <p>&copy; 2025 {{.Title}}. All rights reserved.</p>
     </div>
 </footer>
-</body>
+
 <script>
     function toggleDropdown() {
         const dropdown = document.getElementById('userDropdown');
@@ -318,5 +408,11 @@
             }
         }
     }
+
+    function addToCart(productId) {
+        // Add to cart functionality - you can implement this based on your backend
+        alert('Product added to cart! (Product ID: ' + productId + ')');
+    }
 </script>
+</body>
 </html>

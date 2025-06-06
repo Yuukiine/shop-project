@@ -12,6 +12,8 @@ import (
 	"shop/internal/grpc/auth"
 )
 
+var LoggedIn = false
+
 type Handler struct {
 	AuthClient ssov1.AuthClient
 	logger     *zap.Logger
@@ -52,7 +54,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("login attempt with missing credentials")
 		return
 	}
-	loginResp, err := h.AuthClient.Login(r.Context(), &ssov1.LoginRequest{
+	logResp, err := h.AuthClient.Login(r.Context(), &ssov1.LoginRequest{
 		Email:    email,
 		Password: password,
 		AppId:    1,
@@ -74,7 +76,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setAuthCookie(w, loginResp.Token, time.Now().Add(1*time.Hour))
+	h.setAuthCookie(w, logResp.Token, time.Now().Add(1*time.Hour))
 
 	h.logger.Info("user logged in successfully",
 		zap.String("email", email))
@@ -83,7 +85,25 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if redirectTo == "" {
 		redirectTo = "/"
 	}
+
+	LoggedIn = true
+
 	http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+}
+
+func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("auth_token")
+	if err == nil && cookie.Value != "" {
+		h.logger.Error("failed to logout on auth service", zap.Error(err))
+	}
+
+	h.clearAuthCookie(w)
+
+	h.logger.Info("user logged out")
+
+	LoggedIn = false
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

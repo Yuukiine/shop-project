@@ -1,2 +1,5 @@
 /storage
 *.env
+*.idea
+*.db
+*.sqlite
