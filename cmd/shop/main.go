@@ -25,6 +25,7 @@ import (
 	zapper "shop/internal/logger"
 	mwLogger "shop/internal/logger/middleware"
 	"shop/internal/storage/sqlite"
+	kafka2 "shop/kafka"
 )
 
 func main() {
@@ -35,6 +36,8 @@ func main() {
 	logger.Info("starting application", zap.Any("cfg", cfg))
 
 	application := app.New(logger, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
+
+	kafka := kafka2.New(logger)
 
 	go func() {
 		application.GRPCServ.MustRun()
@@ -59,7 +62,7 @@ func main() {
 
 	homeHandler := home.NewHomeHandler(storage, logger)
 	loginHandler := login.NewLoginHandler(storage, authClient, logger)
-	registerHandler := register.NewRegisterHandler(authClient, logger)
+	registerHandler := register.NewRegisterHandler(kafka, authClient, logger)
 	productsHandler := products.NewProductsHandler(storage, logger)
 	cartHandler := cart.NewCartHandler(storage, logger)
 

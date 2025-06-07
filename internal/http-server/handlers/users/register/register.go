@@ -13,19 +13,26 @@ import (
 	"shop/internal/grpc/auth"
 )
 
+type Kafka interface {
+	SendMessage(message string) error
+	WaitForMessage(email string) error
+}
+
 type Handler struct {
+	kafka      Kafka
 	AuthClient ssov1.AuthClient
 	logger     *zap.Logger
 	tmpl       *template.Template
 }
 
-func NewRegisterHandler(authClient ssov1.AuthClient, logger *zap.Logger) *Handler {
+func NewRegisterHandler(kafka Kafka, authClient ssov1.AuthClient, logger *zap.Logger) *Handler {
 	tmpl, err := template.ParseFiles("./html-templates/register_page.html")
 	if err != nil {
 		logger.Fatal("failed to parse home template", zap.Error(err))
 	}
 
 	return &Handler{
+		kafka:      kafka,
 		logger:     logger,
 		tmpl:       tmpl,
 		AuthClient: authClient,
@@ -84,6 +91,16 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("user registered successfully",
 		zap.String("email", email))
+
+	err = h.kafka.SendMessage("Thanks for registering " + email + "! We hope to see you again")
+	if err != nil {
+		h.logger.Error("failed to send message", zap.Error(err))
+	}
+
+	err = h.kafka.WaitForMessage(email)
+	if err != nil {
+		h.logger.Error("sending message failed", zap.Error(err))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
