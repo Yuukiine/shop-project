@@ -1,6 +1,7 @@
 package login
 
 import (
+	"context"
 	"errors"
 	"html/template"
 	"net/http"
@@ -9,23 +10,32 @@ import (
 	ssov1 "github.com/Yuukiine/protos/gen/go/sso"
 	"go.uber.org/zap"
 
+	"shop/internal/domain/models"
 	"shop/internal/grpc/auth"
 	"shop/internal/http-server/cookies"
 )
 
+type Storage interface {
+	User(ctx context.Context, email string) (models.User, error)
+	MoveCart(ctx context.Context, newUserID int, oldUserID any) error
+	GetCartCount(ctx context.Context, userID any) (int, error)
+}
+
 type Handler struct {
+	storage    Storage
 	AuthClient ssov1.AuthClient
 	logger     *zap.Logger
 	tmpl       *template.Template
 }
 
-func NewLoginHandler(authClient ssov1.AuthClient, logger *zap.Logger) *Handler {
+func NewLoginHandler(storage Storage, authClient ssov1.AuthClient, logger *zap.Logger) *Handler {
 	tmpl, err := template.ParseFiles("./html-templates/login_page.html")
 	if err != nil {
 		logger.Fatal("failed to parse home template", zap.Error(err))
 	}
 
 	return &Handler{
+		storage:    storage,
 		logger:     logger,
 		tmpl:       tmpl,
 		AuthClient: authClient,
@@ -44,6 +54,17 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to parse login form", zap.Error(err))
 		http.Redirect(w, r, "/login?error=Invalid+form+data", http.StatusSeeOther)
 		return
+	}
+
+	var (
+		userID int
+		user   models.User
+		sessID any
+	)
+
+	cookie, err := r.Cookie("session_id")
+	if err == nil {
+		sessID = cookie.Value
 	}
 
 	email := r.FormValue("email")
@@ -75,10 +96,32 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cookies.ClearSessionCookie(w)
 	cookies.SetAuthCookie(w, logResp.Token, time.Now().Add(72*time.Hour))
 
 	h.logger.Info("user logged in successfully",
 		zap.String("email", email))
+
+	cartCount, err := h.storage.GetCartCount(r.Context(), sessID)
+	if err != nil {
+		h.logger.Error("failed to fetch cart count", zap.Error(err))
+	}
+
+	if cartCount > 0 {
+		user, err = h.storage.User(r.Context(), email)
+		if err != nil {
+			h.logger.Error("failed to fetch user", zap.Error(err))
+			return
+		}
+		userID = user.ID
+
+		err = h.storage.MoveCart(r.Context(), userID, sessID)
+		if err != nil {
+			h.logger.Error("failed to move cart", zap.Error(err))
+		}
+	}
+
+	h.logger.Info("cart moved successfully")
 
 	redirectTo := r.URL.Query().Get("redirect")
 	if redirectTo == "" {

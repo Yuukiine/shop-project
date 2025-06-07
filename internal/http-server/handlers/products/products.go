@@ -23,8 +23,8 @@ type Storage interface {
 	TotalProducts(ctx context.Context) (int, error)
 	User(ctx context.Context, email string) (models.User, error)
 	GetSession(ctx context.Context, UUID string) (int, error)
-	AddToCart(ctx context.Context, productID, quantity, userID int) error
-	GetCartCount(ctx context.Context, userID int) (int, error)
+	AddToCart(ctx context.Context, productID, quantity int, userID any) error
+	GetCartCount(ctx context.Context, userID any) (int, error)
 }
 
 type Handler struct {
@@ -128,6 +128,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var userID any
+
 	cookie, err := r.Cookie("auth_token")
 	if err == nil {
 		email, err := jwt.GetEmailFromToken(cookie.Value)
@@ -138,12 +140,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data.Email = email
 	}
 
-	var userID int
 	user, err := h.storage.User(r.Context(), data.Email)
 	if err != nil {
 		h.logger.Error("failed to fetch user", zap.Error(err))
 	} else {
 		userID = user.ID
+	}
+
+	sCookie, err := r.Cookie("session_id")
+	if err == nil {
+		userID = sCookie.Value
 	}
 
 	cartCount, err := h.storage.GetCartCount(r.Context(), userID)
@@ -169,7 +175,7 @@ func (h *Handler) AddToCart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		userID int
+		userID any
 		user   models.User
 	)
 
@@ -199,13 +205,11 @@ func (h *Handler) AddToCart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		userID = user.ID
-	} else {
-		cookie, err = r.Cookie("session_id")
-		if err != nil {
-			h.logger.Error("failed to parse cookie", zap.Error(err))
-			return
-		}
-		userID, err = h.storage.GetSession(r.Context(), cookie.Value)
+	}
+
+	sCookie, err := r.Cookie("session_id")
+	if err == nil {
+		userID = sCookie.Value
 	}
 
 	err = h.storage.AddToCart(r.Context(), productID, quantity, userID)

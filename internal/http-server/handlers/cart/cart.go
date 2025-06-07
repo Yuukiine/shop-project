@@ -21,9 +21,9 @@ const (
 
 type Storage interface {
 	User(ctx context.Context, email string) (models.User, error)
-	GetCart(ctx context.Context, userID int) ([]models.CartItem, error)
-	UpdateCartQuantity(ctx context.Context, productID, userID, quantity int) error
-	RemoveFromCart(ctx context.Context, productID, userID int) error
+	GetCart(ctx context.Context, userID any) ([]models.CartItem, error)
+	UpdateCartQuantity(ctx context.Context, productID, quantity int, userID any) error
+	RemoveFromCart(ctx context.Context, productID int, userID any) error
 }
 
 type Handler struct {
@@ -88,7 +88,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cart []models.CartItem
-	var userID int
+	var userID any
 	user, err := h.storage.User(r.Context(), data.Email)
 	if err != nil {
 		h.logger.Error("failed to fetch user", zap.Error(err))
@@ -96,10 +96,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		userID = user.ID
 	}
 
+	sCookie, err := r.Cookie("session_id")
+	if err == nil {
+		userID = sCookie.Value
+	}
+
 	cart, err = h.storage.GetCart(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("failed to fetch cart", zap.Error(err))
 		h.ServeHTTPWithError(w, "Failed to load your cart. Please try again later")
+		return
 	}
 
 	summary := calculateCartSum(cart)
@@ -127,7 +133,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		userID int
+		userID any
 		user   models.User
 	)
 
@@ -165,7 +171,12 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		userID = user.ID
 	}
 
-	err = h.storage.UpdateCartQuantity(r.Context(), productID, userID, quantity)
+	sCookie, err := r.Cookie("session_id")
+	if err == nil {
+		userID = sCookie.Value
+	}
+
+	err = h.storage.UpdateCartQuantity(r.Context(), productID, quantity, userID)
 	if err != nil {
 		h.logger.Error("failed to update cart quantity", zap.Error(err))
 		h.SendJSONError(w, "Failed to update cart. Please try again.", http.StatusInternalServerError)
@@ -208,7 +219,7 @@ func (h *Handler) RemoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		userID int
+		userID any
 		user   models.User
 	)
 
@@ -232,6 +243,11 @@ func (h *Handler) RemoveHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		userID = user.ID
+	}
+
+	sCookie, err := r.Cookie("session_id")
+	if err == nil {
+		userID = sCookie.Value
 	}
 
 	err = h.storage.RemoveFromCart(r.Context(), productID, userID)

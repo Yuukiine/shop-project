@@ -58,7 +58,7 @@ func main() {
 	}
 
 	homeHandler := home.NewHomeHandler(storage, logger)
-	loginHandler := login.NewLoginHandler(authClient, logger)
+	loginHandler := login.NewLoginHandler(storage, authClient, logger)
 	registerHandler := register.NewRegisterHandler(authClient, logger)
 	productsHandler := products.NewProductsHandler(storage, logger)
 	cartHandler := cart.NewCartHandler(storage, logger)
@@ -83,7 +83,7 @@ func main() {
 		r.Get("/", loginHandler.ServeHTTP)
 		r.Post("/", loginHandler.HandleLogin)
 	})
-	go router.Route("/register", func(r chi.Router) {
+	router.Route("/register", func(r chi.Router) {
 		r.Get("/", registerHandler.ServeHTTP)
 		r.Post("/", registerHandler.HandleRegister)
 	})

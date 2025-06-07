@@ -32,21 +32,34 @@ func NewRegisterHandler(authClient ssov1.AuthClient, logger *zap.Logger) *Handle
 	}
 }
 
+type PageData struct {
+	Email                string `json:"email"`
+	Password             string `json:"password"`
+	ConfirmPassword      string `json:"confirmPassword"`
+	Error                string `json:"error"`
+	EmailError           string `json:"emailError"`
+	PasswordError        string `json:"passwordError"`
+	ConfirmPasswordError string `json:"confirmPasswordError"`
+}
+
 func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		h.logger.Error("failed to parse register form", zap.Error(err))
 		http.Redirect(w, r, "/register?error=Invalid+form+data", http.StatusSeeOther)
 		return
 	}
-	var req struct {
-		Email           string `json:"email"`
-		Password        string `json:"password"`
-		ConfirmPassword string `json:"confirmPassword"`
+
+	data := &PageData{}
+
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		h.logger.Error("failed to decode JSON request", zap.Error(err))
+		h.ServeHTTPWithError(w, "Invalid request format", http.StatusBadRequest)
+		return
 	}
 
-	email := req.Email
-	password := req.Password
-	confirm := req.ConfirmPassword
+	email := data.Email
+	password := data.Password
+	confirm := data.ConfirmPassword
 
 	if password != confirm {
 		h.logger.Error("login failed",
@@ -83,7 +96,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	if err := h.tmpl.Execute(w, ""); err != nil {
+	if err := h.tmpl.Execute(w, PageData{}); err != nil {
 		h.logger.Error("failed to execute home template", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

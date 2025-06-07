@@ -16,7 +16,7 @@ import (
 type Storage interface {
 	GetProduct(ctx context.Context, id int) (models.Product, error)
 	CreateSession(ctx context.Context, UUID string) error
-	GetCartCount(ctx context.Context, userID int) (int, error)
+	GetCartCount(ctx context.Context, userID any) (int, error)
 	User(ctx context.Context, email string) (models.User, error)
 }
 
@@ -53,7 +53,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	var (
-		userID int
+		userID any
 		user   models.User
 	)
 
@@ -78,22 +78,29 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		userID = user.ID
 	} else {
-		UUID := cookies.SetSessionCookie(w)
-		err = h.storage.CreateSession(r.Context(), UUID)
-		if err != nil {
-			h.logger.Error("failed to create session", zap.Error(err))
+		if ICookie, err := r.Cookie("session_id"); err != nil {
+			userID = cookies.SetSessionCookie(w)
+			err = h.storage.CreateSession(r.Context(), userID.(string))
+			if err != nil {
+				h.logger.Error("failed to create session", zap.Error(err))
+			}
+		} else {
+			userID = ICookie.Value
 		}
 	}
 
 	cartCount, err := h.storage.GetCartCount(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("failed to fetch cart count", zap.Error(err))
+	} else {
+		data.CartCount = cartCount
 	}
-	data.CartCount = cartCount
 
 	products := make([]models.Product, 9)
 	for i := range 9 {
-		product, err := h.storage.GetProduct(r.Context(), random.RandomProductID(100))
+		var product models.Product
+
+		product, err = h.storage.GetProduct(r.Context(), random.RandomProductID(100))
 		if err != nil {
 			h.logger.Error("failed to fetch products", zap.Error(err))
 			data.Error = "Unable to load products at this time. Please try again later."
@@ -104,7 +111,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	data.Products = products
 	h.logger.Info("loaded products for home page", zap.Int("count", len(products)))
 
-	if err := h.tmpl.Execute(w, data); err != nil {
+	if err = h.tmpl.Execute(w, data); err != nil {
 		h.logger.Error("failed to execute home template", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
