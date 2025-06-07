@@ -44,12 +44,6 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		ConfirmPassword string `json:"confirmPassword"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.logger.Error("failed to decode JSON request", zap.Error(err))
-		h.ServeHTTPWithError(w, "Invalid request format", http.StatusBadRequest)
-		return
-	}
-
 	email := req.Email
 	password := req.Password
 	confirm := req.ConfirmPassword

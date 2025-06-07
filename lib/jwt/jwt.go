@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"go.uber.org/zap"
 
 	"shop/internal/domain/models"
 )
@@ -27,7 +26,7 @@ func NewToken(user models.User, app models.App, duration time.Duration) (string,
 	return tokenString, nil
 }
 
-func ParseTokenForEmail(logger *zap.Logger, tokenString string) (string, error) {
+func GetEmailFromToken(tokenString string) (string, error) {
 	const op = "jwt.ParseTokenForEmail"
 
 	secretKey := []byte("test-secret")

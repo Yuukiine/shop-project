@@ -10,9 +10,8 @@ import (
 	"go.uber.org/zap"
 
 	"shop/internal/grpc/auth"
+	"shop/internal/http-server/cookies"
 )
-
-var LoggedIn = false
 
 type Handler struct {
 	AuthClient ssov1.AuthClient
@@ -76,7 +75,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setAuthCookie(w, logResp.Token, time.Now().Add(1*time.Hour))
+	cookies.SetAuthCookie(w, logResp.Token, time.Now().Add(72*time.Hour))
 
 	h.logger.Info("user logged in successfully",
 		zap.String("email", email))
@@ -85,8 +84,6 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if redirectTo == "" {
 		redirectTo = "/"
 	}
-
-	LoggedIn = true
 
 	http.Redirect(w, r, redirectTo, http.StatusSeeOther)
 }
@@ -97,11 +94,9 @@ func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to logout on auth service", zap.Error(err))
 	}
 
-	h.clearAuthCookie(w)
+	cookies.ClearAuthCookie(w)
 
 	h.logger.Info("user logged out")
-
-	LoggedIn = false
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -135,31 +130,4 @@ func (h *Handler) ServeHTTPWithError(w http.ResponseWriter, errorMsg, email stri
 		h.logger.Error("failed to execute login template with error", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
-}
-
-func (h *Handler) setAuthCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
-	cookie := &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	}
-	http.SetCookie(w, cookie)
-}
-
-func (h *Handler) clearAuthCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{
-		Name:     "auth_token",
-		Value:    "",
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-		MaxAge:   -1,
-	}
-	http.SetCookie(w, cookie)
 }

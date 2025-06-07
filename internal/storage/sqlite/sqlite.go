@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
@@ -128,7 +129,7 @@ func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
 	const op = "storage.User"
 
 	stmt, err := s.db.Prepare(`
-		SELECT user_id, email, pass_hash 
+		SELECT id, email, pass_hash 
 		FROM users 
 		WHERE email = ?`)
 	if err != nil {
@@ -220,4 +221,173 @@ func (s *Storage) TotalProducts(ctx context.Context) (int, error) {
 	}
 
 	return total, nil
+}
+
+func (s *Storage) CreateSession(ctx context.Context, UUID string) error {
+	const op = "storage.CreateSession"
+
+	expiresAt := time.Now().Add(24 * time.Hour)
+
+	stmt, err := s.db.Prepare(`
+		INSERT INTO sessions (uuid, expires_at)
+		VALUES(?, ?)`)
+	if err != nil {
+		return fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, UUID, expiresAt)
+	if err != nil {
+		return fmt.Errorf("%s: failed to insert session: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) GetSession(ctx context.Context, UUID string) (int, error) {
+	const op = "storage.GetSession"
+
+	stmt, err := s.db.Prepare(`
+    	SELECT id
+    	FROM sessions
+    	WHERE uuid = ?`)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	row := stmt.QueryRowContext(ctx, UUID)
+	var id int
+
+	err = row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%s: session not found %w", op, err)
+		}
+
+		return 0, fmt.Errorf("%s: failed to fetch session: %w", op, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) AddToCart(ctx context.Context, productID, quantity, userID int) error {
+	const op = "storage.AddToCart"
+
+	stmt, err := s.db.Prepare(`
+		INSERT INTO cart (product_id, quantity, user_id)
+		VALUES(?, ?, ?)
+		ON CONFLICT(user_id, product_id)
+		DO UPDATE SET quantity = quantity + excluded.quantity;`)
+	if err != nil {
+		return fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, productID, quantity, userID)
+	if err != nil {
+		return fmt.Errorf("%s: failed to add to cart: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) GetCart(ctx context.Context, userID int) ([]models.CartItem, error) {
+	const op = "storage.GetCart"
+
+	stmt, err := s.db.Prepare(`
+		SELECT p.id, p.name, p.description, p.price, c.quantity
+		FROM cart AS c
+		JOIN products AS p on p.id = c.product_id
+		WHERE user_id = ?`)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	var cartItems []models.CartItem
+
+	rows, err := stmt.QueryContext(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to fetch cart items: %w", op, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c models.CartItem
+
+		err = rows.Scan(
+			&c.ProductID,
+			&c.ProductName,
+			&c.ProductDescription,
+			&c.ProductPrice,
+			&c.Quantity,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed to fetch cart item: %w", op, err)
+		}
+		cartItems = append(cartItems, c)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan products: %w", err)
+	}
+
+	return cartItems, nil
+}
+
+func (s *Storage) GetCartCount(ctx context.Context, userID int) (int, error) {
+	const op = "storage.GetCartCount"
+
+	stmt, err := s.db.Prepare(`
+		SELECT SUM(quantity)
+		FROM cart
+		HAVING user_id = ?`)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	row := stmt.QueryRowContext(ctx, userID)
+	var count int
+
+	err = row.Scan(&count)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%s: cart not found %w", op, storage.ErrUserNotFound)
+		}
+		return 0, fmt.Errorf("%s: failed to fetch cart count: %w", op, err)
+	}
+
+	return count, nil
+}
+
+func (s *Storage) UpdateCartQuantity(ctx context.Context, productID, userID, quantity int) error {
+	const op = "storage.UpdateCartQuantity"
+
+	stmt, err := s.db.Prepare(`
+		UPDATE cart SET quantity = ?
+		WHERE product_id = ? AND user_id = ?`)
+	if err != nil {
+		return fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, quantity, productID, userID)
+	if err != nil {
+		return fmt.Errorf("%s: failed to update cart quantity: %w", op, err)
+	}
+
+	return nil
+}
+
+func (s *Storage) RemoveFromCart(ctx context.Context, productID, userID int) error {
+	const op = "storage.RemoveFromCart"
+
+	stmt, err := s.db.Prepare(`
+		DELETE FROM cart WHERE product_id = ? AND user_id = ?`)
+	if err != nil {
+		return fmt.Errorf("%s: failed to prepare statement: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, productID, userID)
+	if err != nil {
+		return fmt.Errorf("%s: failed to remove from cart: %w", op, err)
+	}
+
+	return nil
 }

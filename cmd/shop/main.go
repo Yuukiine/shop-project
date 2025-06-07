@@ -17,6 +17,7 @@ import (
 
 	"shop/internal/app"
 	"shop/internal/config"
+	"shop/internal/http-server/handlers/cart"
 	"shop/internal/http-server/handlers/home"
 	"shop/internal/http-server/handlers/products"
 	"shop/internal/http-server/handlers/users/login"
@@ -60,6 +61,7 @@ func main() {
 	loginHandler := login.NewLoginHandler(authClient, logger)
 	registerHandler := register.NewRegisterHandler(authClient, logger)
 	productsHandler := products.NewProductsHandler(storage, logger)
+	cartHandler := cart.NewCartHandler(storage, logger)
 
 	router := chi.NewRouter()
 
@@ -77,17 +79,26 @@ func main() {
 		w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`))
 	})
 
-	router.Route("/login", func(r chi.Router) {
+	go router.Route("/login", func(r chi.Router) {
 		r.Get("/", loginHandler.ServeHTTP)
 		r.Post("/", loginHandler.HandleLogin)
 	})
-	router.Route("/register", func(r chi.Router) {
+	go router.Route("/register", func(r chi.Router) {
 		r.Get("/", registerHandler.ServeHTTP)
 		r.Post("/", registerHandler.HandleRegister)
 	})
 	router.Get("/logout", loginHandler.HandleLogout)
 
-	router.Get("/products", productsHandler.ServeHTTP)
+	go router.Route("/products", func(r chi.Router) {
+		r.Get("/", productsHandler.ServeHTTP)
+	})
+
+	go router.Route("/cart", func(r chi.Router) {
+		r.Get("/", cartHandler.ServeHTTP)
+		r.Post("/add", productsHandler.AddToCart)
+		r.Post("/update", cartHandler.UpdateHandler)
+		r.Post("/remove", cartHandler.RemoveHandler)
+	})
 
 	srv := &http.Server{
 		Addr:    cfg.Address,

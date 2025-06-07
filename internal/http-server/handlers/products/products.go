@@ -2,6 +2,7 @@ package products
 
 import (
 	"context"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -20,6 +21,10 @@ const (
 type Storage interface {
 	GetProducts(ctx context.Context, limit, offset int) ([]models.Product, error)
 	TotalProducts(ctx context.Context) (int, error)
+	User(ctx context.Context, email string) (models.User, error)
+	GetSession(ctx context.Context, UUID string) (int, error)
+	AddToCart(ctx context.Context, productID, quantity, userID int) error
+	GetCartCount(ctx context.Context, userID int) (int, error)
 }
 
 type Handler struct {
@@ -46,6 +51,8 @@ type PageData struct {
 	User          string
 	Email         string
 	Products      []models.Product
+	CartCount     int
+	Success       string
 	Error         string
 	CurrentPage   int
 	TotalPages    int
@@ -62,6 +69,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	pageStr := r.URL.Query().Get("page")
 	page := defaultPage
+	data := PageData{}
 
 	if pageStr != "" {
 		p, err := strconv.Atoi(pageStr)
@@ -74,10 +82,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := PageData{
-		Title:       "Look at our products!",
-		CurrentPage: page,
-	}
+	data.Title = "Look at our products!"
+	data.CurrentPage = page
 
 	products, err := h.storage.GetProducts(r.Context(), productsPerPage, (page-1)*productsPerPage)
 	if err != nil {
@@ -124,12 +130,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie("auth_token")
 	if err == nil {
-		email, err := jwt.ParseTokenForEmail(h.logger, cookie.Value)
+		email, err := jwt.GetEmailFromToken(cookie.Value)
 		if err != nil {
 			h.logger.Error("failed to parse token", zap.Error(err))
 		}
 		data.User = "true"
 		data.Email = email
+	}
+
+	var userID int
+	user, err := h.storage.User(r.Context(), data.Email)
+	if err != nil {
+		h.logger.Error("failed to fetch user", zap.Error(err))
+	} else {
+		userID = user.ID
+	}
+
+	cartCount, err := h.storage.GetCartCount(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to fetch cart count", zap.Error(err))
+	} else {
+		data.CartCount = cartCount
 	}
 
 	data.PageNumbers = generatePageNumbers(page, totalPages)
@@ -138,6 +159,79 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("failed to execute home template", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+}
+
+func (h *Handler) AddToCart(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		h.logger.Error("failed to parse form", zap.Error(err))
+		http.Error(w, "Failed to parse form data", http.StatusBadRequest)
+		return
+	}
+	var (
+		userID int
+		user   models.User
+	)
+
+	productStr := r.FormValue("product_id")
+	productID, err := strconv.Atoi(productStr)
+	if err != nil {
+		h.logger.Error("failed to parse product id", zap.Error(err))
+	}
+
+	quantityStr := r.FormValue("quantity")
+	quantity, err := strconv.Atoi(quantityStr)
+	if err != nil {
+		quantity = 1
+	}
+
+	cookie, err := r.Cookie("auth_token")
+	if err == nil {
+		email, err := jwt.GetEmailFromToken(cookie.Value)
+		if err != nil {
+			h.logger.Error("failed to parse token", zap.Error(err))
+			return
+		}
+
+		user, err = h.storage.User(r.Context(), email)
+		if err != nil {
+			h.logger.Error("failed to fetch user", zap.Error(err))
+			return
+		}
+		userID = user.ID
+	} else {
+		cookie, err = r.Cookie("session_id")
+		if err != nil {
+			h.logger.Error("failed to parse cookie", zap.Error(err))
+			return
+		}
+		userID, err = h.storage.GetSession(r.Context(), cookie.Value)
+	}
+
+	err = h.storage.AddToCart(r.Context(), productID, quantity, userID)
+	if err != nil {
+		h.logger.Error("failed to add to cart", zap.Error(err))
+		return
+	}
+
+	cartCount, err := h.storage.GetCartCount(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to fetch cart count", zap.Error(err))
+		return
+	}
+
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"success":   true,
+			"cartCount": cartCount,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			h.logger.Error("failed to encode JSON response", zap.Error(err))
+		}
+		h.logger.Info("successfully added to cart")
+	} else {
+		http.Redirect(w, r, "/products?success=item-added", http.StatusSeeOther)
 	}
 }
 
